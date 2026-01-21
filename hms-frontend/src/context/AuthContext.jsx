@@ -7,6 +7,16 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Add these to your existing AuthContext state
+const [darkMode, setDarkMode] = useState(localStorage.getItem("theme") === "dark");
+
+const toggleDarkMode = () => {
+  const newMode = !darkMode;
+  setDarkMode(newMode);
+  localStorage.setItem("theme", newMode ? "dark" : "light");
+};
+
+// Make sure to include darkMode and toggleDarkMode in your Context.Provider value
   // Helper to process token and set user state
   const processToken = (token) => {
     try {
@@ -46,7 +56,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, darkMode, toggleDarkMode }}>
       {!loading && children}
     </AuthContext.Provider>
   );

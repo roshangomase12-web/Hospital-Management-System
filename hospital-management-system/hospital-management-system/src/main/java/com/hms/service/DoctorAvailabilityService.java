@@ -1,6 +1,7 @@
 package com.hms.service;
 
 import com.hms.model.Doctor;
+import com.hms.repository.AppointmentRepository; // ✅ Added this
 import com.hms.model.DoctorAvailability;
 import com.hms.model.User;
 import com.hms.repository.DoctorAvailabilityRepository;
@@ -12,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class DoctorAvailabilityService {
@@ -19,14 +21,20 @@ public class DoctorAvailabilityService {
     private final DoctorAvailabilityRepository availabilityRepo;
     private final DoctorRepository doctorRepo;
     private final UserRepository userRepo;
+    private final AppointmentRepository appointmentRepo;
+    
 
-    public DoctorAvailabilityService(DoctorAvailabilityRepository availabilityRepo, DoctorRepository doctorRepo, UserRepository userRepo) {
-        this.availabilityRepo = availabilityRepo;
+    public DoctorAvailabilityService(DoctorAvailabilityRepository availabilityRepo, 
+            DoctorRepository doctorRepo, 
+            UserRepository userRepo,
+            AppointmentRepository appointmentRepository) { // ✅ Injected this        this.availabilityRepo = availabilityRepo;
+    	this.availabilityRepo = availabilityRepo;
         this.doctorRepo = doctorRepo;
         this.userRepo = userRepo;
+        this.appointmentRepo = appointmentRepository;
     }
 
-    public DoctorAvailability addAvailability(String username, LocalDate date, LocalTime time) {
+    public DoctorAvailability addAvailability(String username, LocalDate date, LocalTime startTime, LocalTime endTime) {
         User user = userRepo.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
@@ -36,13 +44,13 @@ public class DoctorAvailabilityService {
         DoctorAvailability availability = new DoctorAvailability();
         availability.setDoctor(doctor);
         availability.setAvailableDate(date);
-        availability.setAvailableTime(time);
+        availability.setAvailableTime(startTime);
+        availability.setEndTime(endTime); 
         availability.setStatus("OPEN");
 
         return availabilityRepo.save(availability);
     }
 
- // ✅ FIXED LINE 53: Clean Logic
     public List<DoctorAvailability> getDoctorAvailability(String doctorUsername) {
         Optional<User> userOpt = userRepo.findByUsername(doctorUsername);
         if (userOpt.isEmpty()) return List.of();
@@ -50,8 +58,8 @@ public class DoctorAvailabilityService {
         Optional<Doctor> doctorOpt = doctorRepo.findByUser(userOpt.get());
         if (doctorOpt.isEmpty()) return List.of();
 
-        // This line is now safe and won't cause mapping errors
-        return availabilityRepo.findByDoctor(doctorOpt.get());
+        // FIXED LINE 53: Pass the ID to match the Repository method
+        return availabilityRepo.findByDoctorId(doctorOpt.get().getId());
     }
 
     @Transactional
@@ -59,13 +67,27 @@ public class DoctorAvailabilityService {
         DoctorAvailability availability = availabilityRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Slot not found"));
 
-        String ownerUsername = availability.getDoctor().getUser().getUsername();
-        User currentUser = userRepo.findByUsername(username).orElseThrow();
-
-        if (!ownerUsername.equals(username) && !currentUser.getRole().equals("ROLE_ADMIN")) {
+        // Security: Check ownership
+        if (!availability.getDoctor().getUser().getUsername().equals(username)) {
             throw new RuntimeException("Unauthorized delete attempt.");
         }
+
+        // 1. ✅ DELETE APPOINTMENT FIRST (Fixes the SQL Foreign Key Error)
+        appointmentRepo.deleteByAvailabilityId(id);        
         
+        // 2. DELETE SLOT
         availabilityRepo.delete(availability);
+    }
+    public List<User> findDoctorsWithActiveSlots() {
+        // 1. Fetch all availability slots that are OPEN
+        List<DoctorAvailability> activeSlots = availabilityRepo.findAll().stream()
+                .filter(a -> "OPEN".equalsIgnoreCase(a.getStatus()) || "AVAILABLE".equalsIgnoreCase(a.getStatus()))
+                .collect(Collectors.toList());
+
+        // 2. Extract the unique Doctors (Users) from those slots
+        return activeSlots.stream()
+                .map(slot -> slot.getDoctor().getUser()) // Adjust based on your Entity relationships
+                .distinct()
+                .collect(Collectors.toList());
     }
 }

@@ -1,102 +1,154 @@
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
-import { UserPlus, Trash2, CheckCircle, Stethoscope } from "lucide-react";
+import { Users, Calendar, Clock, CheckCircle, Stethoscope, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext"; // 1. Import useAuth
 
-export default function AdminDoctors() {
-  const [doctors, setDoctors] = useState([]);
+export default function AdminDashboard() {
+  const { darkMode } = useAuth(); // Add this line
+  const [stats, setStats] = useState({
+    totalDoctors: 0,
+    totalPatients: 0,
+    totalAdmins: 0, // Add this line
+    totalAppointments: 0,
+    pendingAppointments: 0
+  });
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchDoctors();
-  }, []);
 
-  const fetchDoctors = async () => {
-    try {
-      // Fetching doctors from the doctor profile endpoint
-      const res = await api.get("/admin/users/recent");
-      // Filter to only show users with ROLE_DOCTOR
-      setDoctors(res.data.filter(u => u.role === "ROLE_DOCTOR"));
-    } catch (err) {
-      console.error("Error fetching doctors", err);
-    }
-  };
-
-const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this doctor?")) {
+// src/pages/admin/AdminDashboard.jsx
+useEffect(() => {
+    const fetchStats = async () => {
         try {
-            const response = await api.delete(`/admin/users/${id}`);
-            
-            // ✅ FIX: Don't call .json() if the status is 200 OK with no body
-            if (response.status === 200) {
-                alert("Doctor deleted successfully");
-                fetchDoctors(); // Refresh the list
-            }
-        } catch (err) {
-            console.error("Delete error", err);
-            alert("Could not delete. Check if doctor has appointments.");
+            // Ensure port matches your Spring Boot log (8083)
+            const response = await api.get('/admin/stats'); 
+            setStats(response.data);
+        } catch (error) {
+            console.error("Error fetching stats:", error);
+            // Optional: Set default stats so the UI doesn't break
+            setStats({ 
+                totalDoctors: 0, 
+                totalPatients: 0, 
+                
+                totalAppointments: 0, 
+                pendingAppointments: 0 
+            });
+        } finally {
+            // ✅ This runs whether the try SUCCEEDS or FAILS
+            setLoading(false); 
         }
-    }
-};
+    };
+    fetchStats();
+}, []);
+
+ // 1. Update the StatCard to accept an 'onClick' prop
+const StatCard = ({ icon: Icon, label, value, color, onClick }) => (
+  <div 
+    onClick={onClick}
+    className={`bg-white p-6 rounded-3xl border border-slate-100 shadow-sm transition-all ${onClick ? 'cursor-pointer hover:shadow-md hover:border-blue-200 active:scale-95' : ''}`}
+  >
+    <div className={`w-12 h-12 ${color} rounded-2xl flex items-center justify-center mb-4`}>
+      <Icon size={24} className="text-white" />
+    </div>
+    <p className="text-slate-500 font-medium text-sm">{label}</p>
+    <h3 className="text-3xl font-bold text-slate-900 mt-1">{value}</h3>
+  </div>
+);
+
+  if (loading) return <div className="p-10 animate-pulse text-slate-400">Loading Dashboard...</div>;
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-800">Manage Doctors</h2>
-          <p className="text-slate-500">View and manage hospital medical staff</p>
-        </div>
-        <button 
-          onClick={() => navigate("/admin/create")}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all"
-        >
-          <UserPlus size={20} /> Add New Doctor
-        </button>
+    <div className="p-8 bg-slate-50 min-h-screen">
+      <div className="mb-8">
+        <h2 className="text-3xl font-extrabold text-slate-900">Hospital Overview</h2>
+        <p className="text-slate-500">Real-time status of your medical facility.</p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="p-4 text-slate-600 font-semibold">Doctor Name</th>
-              <th className="p-4 text-slate-600 font-semibold">Specialization</th>
-              <th className="p-4 text-slate-600 font-semibold">System ID</th>
-              <th className="p-4 text-slate-600 font-semibold text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {doctors.map((doc) => (
-              <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                <td className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
-                    <Stethoscope size={20} />
-                  </div>
-                  <span className="font-medium text-slate-700">Dr. {doc.username}</span>
-                </td>
-                <td className="p-4">
-                  <span className="text-slate-600 italic">Medical Staff</span>
-                </td>
-                <td className="p-4 text-slate-500 font-mono text-sm">#{doc.id}</td>
-                <td className="p-4">
-                  <div className="flex justify-center gap-3">
-                    <button 
-                      onClick={() => handleDelete(doc.id)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete Doctor"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {doctors.length === 0 && (
-          <div className="p-10 text-center text-slate-400">
-            No doctors found in the system.
+      {/* Stats Grid */}
+    {/* Updated Stats Grid with onClick actions */}
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+  <StatCard 
+    icon={Users} 
+    label="Admins" 
+    value={stats.totalAdmins} 
+    color="bg-purple-600" 
+    onClick={() => navigate("/admin/staff")} 
+  />
+  <StatCard 
+    icon={Stethoscope} 
+    label="Total Doctors" 
+    value={stats.totalDoctors} 
+    color="bg-blue-600" 
+    onClick={() => navigate("/admin/doctors")} 
+  />
+  <StatCard 
+    icon={Users} 
+    label="Total Patients" 
+    value={stats.totalPatients} 
+    color="bg-indigo-600" 
+    onClick={() => navigate("/admin/patients")} 
+  />
+  <StatCard 
+    icon={Calendar} 
+    label="Appointments" 
+    value={stats.totalAppointments} 
+    color="bg-emerald-600" 
+    onClick={() => navigate("/admin/appointments")} 
+  />
+  <StatCard 
+    icon={Clock} 
+    label="Pending Requests" 
+    value={stats.pendingAppointments} 
+    color="bg-amber-500" 
+    onClick={() => navigate("/admin/appointments")} 
+  />
+  
+</div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Quick Actions */}
+        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+          <h3 className="text-xl font-bold text-slate-800 mb-6">Quick Management</h3>
+          <div className="space-y-4">
+            <button 
+              onClick={() => navigate("/admin/doctors")}
+              className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-blue-50 rounded-2xl transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-white rounded-lg shadow-sm group-hover:text-blue-600"><Stethoscope size={20} /></div>
+                <span className="font-semibold text-slate-700">Manage Medical Staff</span>
+              </div>
+              <ArrowRight size={18} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
+            </button>
+            
+            <button 
+              onClick={() => navigate("/admin/patients")}
+              className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-indigo-50 rounded-2xl transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-white rounded-lg shadow-sm group-hover:text-indigo-600"><Users size={20} /></div>
+                <span className="font-semibold text-slate-700">Patient Directory</span>
+              </div>
+              <ArrowRight size={18} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
+            </button>
           </div>
-        )}
+        </div>
+
+        {/* Appointment Summary Card */}
+        <div className="bg-blue-600 p-8 rounded-3xl text-white relative overflow-hidden">
+          <div className="relative z-10">
+            <h3 className="text-xl font-bold mb-2">Appointment Tracking</h3>
+            <p className="text-blue-100 mb-6 text-sm">You have {stats.pendingAppointments} requests waiting for approval.</p>
+            <button 
+              onClick={() => navigate("/admin/appointments")}
+              className="bg-white text-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-blue-50 transition-all"
+            >
+              View All Appointments
+            </button>
+          </div>
+          <Calendar size={150} className="absolute -right-10 -bottom-10 text-blue-500 opacity-20" />
+        </div>
       </div>
     </div>
   );

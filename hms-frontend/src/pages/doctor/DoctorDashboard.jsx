@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
-import { Clock, Trash2, Plus, Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext"; // 1. Import useAuth
+import { Clock, Trash2, Plus, Calendar as CalendarIcon, Loader2, CheckCircle, Activity } from "lucide-react";
 
 export default function DoctorDashboard() {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState({
-    availableDate: new Date().toISOString().split("T")[0],
-    availableTime: "09:00:00"
-  });
+ const [formData, setFormData] = useState({
+  availableDate: new Date().toISOString().split("T")[0],
+  availableTime: "09:00", // Removed :00
+  endTime: "09:30"        // Removed :00
+});
 
   const fetchSlots = async () => {
     try {
@@ -21,124 +23,196 @@ export default function DoctorDashboard() {
       setLoading(false);
     }
   };
+const handleCreateSlot = async () => {
+    try {
+        // Construct the object to match the Java Entity exactly
+        const payload = {
+            availableDate: slotDate,    // Must be "YYYY-MM-DD"
+            availableTime: startTime,   // Must be "HH:mm" (e.g., "09:00")
+            endTime: endTime,           // Must be "HH:mm" (e.g., "10:00")
+            status: "OPEN"
+        };
+console.log("Sending payload:", payload); // Debugging
+
+        const response = await api.post('/doctor/availability', payload);
+        alert("Slot added successfully!");
+        fetchSlots(); // Refresh the table
+    } catch (err) {
+        // This will print the EXACT error from Spring Boot in your console
+        console.error("400 Error Response:", err.response?.data);
+        alert("Error: " + (err.response?.data?.message || "Failed to add slot"));
+    }
+};
 
   useEffect(() => {
     fetchSlots();
   }, []);
 
-  // ✅ ADD SLOT
-  const handleAddSlot = async (e) => {
-    e.preventDefault();
+ const handleAddSlot = async (e) => {
+  e.preventDefault();
+  try {
+    // We send formData directly because its keys match your Java Entity exactly
+    console.log("Sending payload:", formData); 
+
+    await api.post("/doctor/availability", {
+      ...formData,
+      status: "OPEN"
+    });
+
+    alert("Slot added successfully!");
+    fetchSlots(); // Refresh list
+  } catch (err) {
+    console.error("400 Error Details:", err.response?.data);
+    alert("Error: " + (err.response?.data?.message || "Check time format (HH:mm)"));
+  }
+};
+
+  const handleRelease = async (slotId) => {
+    if (!window.confirm("Are you sure you want to delete this slot?")) return;
     try {
-      // Backend expects @RequestBody DoctorAvailability
-      await api.post("/doctor/availability", formData);
-      alert("Slot added successfully!");
-      fetchSlots(); // Refresh list
+      const response = await api.delete(`/doctor/availability/${slotId}`);
+      alert(response.data.message);
+      fetchSlots();
     } catch (err) {
-      const errorMsg = err.response?.data?.message || "Failed to add slot";
-      alert("Error: " + errorMsg);
+      alert("Error: " + (err.response?.data?.message || "Error releasing slot"));
     }
   };
 
-  // ✅ RELEASE SLOT (The Fix)
-  const handleRelease = async (slotId) => {
-    if (!window.confirm("Are you sure you want to delete this slot?")) return;
-
-    try {
-      // 1. Must be api.delete to match @DeleteMapping in Java
-      // 2. We pass the slotId in the URL
-      const response = await api.delete(`/doctor/availability/${slotId}`);
-      
-      // 3. Backend now returns JSON Map.of("message", "...") 
-      alert(response.data.message);
-      fetchSlots(); // Refresh list
-    } catch (err) {
-      // 4. Handle JSON error response from ResponseEntity
-      const errorMsg = err.response?.data?.message || "Check network/console";
-      console.error("Release error details:", err.response);
-      alert("Failed to release slot: " + errorMsg);
-    }
+  const stats = {
+    total: slots.length,
+    open: slots.filter(s => s.status === 'OPEN').length,
+    booked: slots.filter(s => s.status === 'BOOKED').length
   };
 
   return (
-    <div className="p-6 bg-slate-50 min-h-screen">
-      <div className="max-w-4xl mx-auto">
-        <h2 className="text-3xl font-bold text-slate-800 mb-8">Doctor Dashboard</h2>
+    <div className="p-8 bg-slate-50 min-h-screen">
+      <div className="max-w-5xl mx-auto">
+        <header className="mb-10">
+          <h2 className="text-3xl font-bold text-slate-900">Doctor Dashboard</h2>
+          <p className="text-slate-500">Manage your consultation hours and availability.</p>
+        </header>
 
-        {/* Create Slot Form */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Plus className="text-blue-600" size={20} /> Add Availability Slot
-          </h3>
-          <form onSubmit={handleAddSlot} className="flex flex-wrap gap-4 items-end">
+        {/* Mini Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 flex items-center gap-4">
+            <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><Activity size={24}/></div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Date</label>
-              <input
-                type="date"
-                className="border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={formData.availableDate}
-                onChange={(e) => setFormData({...formData, availableDate: e.target.value})}
-                required
-              />
+              <p className="text-sm text-slate-500 font-medium">Total Slots</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
             </div>
+          </div>
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 flex items-center gap-4">
+            <div className="p-3 bg-green-100 text-green-600 rounded-2xl"><CheckCircle size={24}/></div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Time</label>
-              <input
-                type="time"
-                step="1"
-                className="border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={formData.availableTime}
-                onChange={(e) => setFormData({...formData, availableTime: e.target.value})}
-                required
-              />
+              <p className="text-sm text-slate-500 font-medium">Available</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.open}</p>
             </div>
-            <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium">
-              Create Slot
-            </button>
-          </form>
+          </div>
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 flex items-center gap-4">
+            <div className="p-3 bg-indigo-100 text-indigo-600 rounded-2xl"><Clock size={24}/></div>
+            <div>
+              <p className="text-sm text-slate-500 font-medium">Booked</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.booked}</p>
+            </div>
+          </div>
         </div>
 
-        {/* Slots List */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-4 border-b bg-slate-50">
-            <h3 className="font-semibold text-slate-700">My Availability History</h3>
-          </div>
-          
-          {loading ? (
-            <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-slate-400" /></div>
-          ) : (
-            <div className="divide-y">
-              {slots.length > 0 ? slots.map((slot) => (
-                <div key={slot.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors">
-                  <div className="flex gap-6 items-center">
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <CalendarIcon size={16} />
-                      <span>{slot.availableDate}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <Clock size={16} />
-                      <span className="font-medium text-slate-800">{slot.availableTime}</span>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      slot.status === 'OPEN' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {slot.status}
-                    </span>
-                  </div>
-                  
-                  <button 
-                    onClick={() => handleRelease(slot.id)}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete Slot"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Form */}
+          <div className="lg:col-span-1">
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 sticky top-8">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                <Plus className="text-blue-600" size={20} /> New Slot
+              </h3>
+              <form onSubmit={handleAddSlot} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date</label>
+                  <input
+                    type="date"
+                    className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+                    value={formData.availableDate}
+                    onChange={(e) => setFormData({...formData, availableDate: e.target.value})}
+                    required
+                  />
                 </div>
-              )) : (
-                <div className="p-10 text-center text-slate-400">No slots created yet.</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Start</label>
+                    <input
+                      type="time"
+                      className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+                      value={formData.availableTime}
+                      onChange={(e) => setFormData({...formData, availableTime: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">End</label>
+                    <input
+                      type="time"
+                      className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+                      value={formData.endTime}
+                      onChange={(e) => setFormData({...formData, endTime: e.target.value})}
+                      required
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl hover:bg-blue-700 transition-all font-bold shadow-lg shadow-blue-100">
+                  Create Slot
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="p-6 border-b border-slate-100">
+                <h3 className="font-bold text-slate-800">Availability Schedule</h3>
+              </div>
+              
+              {loading ? (
+                <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-500" /></div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {slots.length > 0 ? slots.map((slot) => (
+                    <div key={slot.id} className="p-6 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                      <div className="flex gap-8 items-center">
+                        <div className="text-center bg-slate-100 px-4 py-2 rounded-2xl">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">Date</p>
+                          <p className="text-sm font-bold text-slate-700">{slot.availableDate}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Duration</p>
+                          <div className="flex items-center gap-2 text-slate-800 font-semibold">
+                            <Clock size={14} className="text-blue-500" />
+                            {slot.availableTime.slice(0,5)} - {slot.endTime?.slice(0,5) || "--:--"}
+                          </div>
+                        </div>
+                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                          slot.status === 'OPEN' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {slot.status}
+                        </span>
+                      </div>
+                      
+                      <button 
+                        onClick={() => handleRelease(slot.id)}
+                        className="p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    </div>
+                  )) : (
+                    <div className="p-20 text-center text-slate-400">
+                      <CalendarIcon size={48} className="mx-auto mb-4 opacity-20" />
+                      <p>No availability slots configured yet.</p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

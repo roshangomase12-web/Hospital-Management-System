@@ -1,77 +1,53 @@
 package com.hms.model;
 
 import jakarta.persistence.*;
-
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 import java.time.LocalDate;
 import java.time.LocalTime;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
 @Entity
-@Table(name = "doctor_availability")
 public class DoctorAvailability {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // DOCTOR
     @ManyToOne
-    @JsonIgnoreProperties({"user", "specialization", "approved"}) // ✅ Prevents deep nesting
     private Doctor doctor;
-    
-    private LocalTime endTime; // Add this if missing
 
-    // DATE
-    @JsonFormat(pattern = "yyyy-MM-dd")
+ // Inside DoctorAvailability.java
+
+    @OneToOne(mappedBy = "availability", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Appointment appointment;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd") // Format: 2024-05-20
     private LocalDate availableDate;
 
-    // TIME SLOT
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm")    // Format: 09:00
     private LocalTime availableTime;
 
-    // OPEN / BOOKED
-    private String status;
+    @JsonFormat(pattern = "HH:mm")    // Format: 10:00
+    private LocalTime endTime;      // Added: End Time
+
+    private String status; // "OPEN", "BOOKED"
+
+    // Getters and Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public Doctor getDoctor() { return doctor; }
+    public void setDoctor(Doctor doctor) { this.doctor = doctor; }
     
 
-    // ===== GETTERS & SETTERS =====
+    public LocalDate getAvailableDate() { return availableDate; }
+    public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
 
-    public Long getId() {
-        return id;
-    }
+    public LocalTime getAvailableTime() { return availableTime; }
+    public void setAvailableTime(LocalTime availableTime) { this.availableTime = availableTime; }
 
-    public Doctor getDoctor() {
-        return doctor;
-    }
+    public LocalTime getEndTime() { return endTime; }
+    public void setEndTime(LocalTime endTime) { this.endTime = endTime; }
 
-    public void setDoctor(Doctor doctor) {
-        this.doctor = doctor;
-    }
-
-    public LocalDate getAvailableDate() {
-        return availableDate;
-    }
-
-    public void setAvailableDate(LocalDate availableDate) {
-        this.availableDate = availableDate;
-    }
-
-    public LocalTime getAvailableTime() {
-        return availableTime;
-    }
-
-    public void setAvailableTime(LocalTime availableTime) {
-        this.availableTime = availableTime;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 }

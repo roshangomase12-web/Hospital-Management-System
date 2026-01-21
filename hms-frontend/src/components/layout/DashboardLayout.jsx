@@ -8,18 +8,19 @@ export default function DashboardLayout({ role }) {
 
   const handleLogout = () => {
     logout();
-    navigate("/login"); // Redirect to login after logout
+    navigate("/login");
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      {/* 1. Use the Sidebar component */}
+    <div className="flex min-h-screen bg-slate-50">
+      {/* Sidebar - Fixed on the left */}
       <Sidebar role={role} handleLogout={handleLogout} />
 
-      {/* 2. Main content area */}
-      <main style={{ flex: 1, padding: "30px", background: "#f9fafb" }}>
-        {/* This is where AdminDashboard, DoctorDashboard, etc. will render */}
-        <Outlet /> 
+      {/* Main Content - Scrollable on the right */}
+      <main className="flex-1 p-8 overflow-y-auto">
+        <div className="max-w-6xl mx-auto">
+          <Outlet /> 
+        </div>
       </main>
     </div>
   );

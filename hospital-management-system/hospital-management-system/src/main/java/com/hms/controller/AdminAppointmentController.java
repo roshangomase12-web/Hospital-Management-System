@@ -1,10 +1,11 @@
 package com.hms.controller;
 
 import com.hms.model.Appointment;
-
 import com.hms.service.AppointmentService;
-import org.springframework.web.bind.annotation.*;
 
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
@@ -12,13 +13,15 @@ import java.util.List;
 public class AdminAppointmentController {
 
     private final AppointmentService appointmentService;
-
+ 
     public AdminAppointmentController(AppointmentService appointmentService) {
         this.appointmentService = appointmentService;
     }
 
+ // KEEP ONLY THIS ONE
     @GetMapping
-    public List<Appointment> getAll() {
-        return appointmentService.getAll();
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<Appointment>> getAllAppointments() {
+        return ResponseEntity.ok(appointmentService.getAllAppointments());
     }
 }

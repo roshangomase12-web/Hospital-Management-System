@@ -8,14 +8,16 @@ export default function AdminCreateUser() {
   const [formData, setFormData] = useState({
     username: "", 
     password: "", 
-    role: "ROLE_DOCTOR", 
-    name: "", 
+   email: '',
+    role: 'ROLE_DOCTOR', // Ensure it has the ROLE_ prefix
+    name: '',
     specialization: ""
   });
 
   const handleCreate = async (e) => {
     e.preventDefault();
     setLoading(true);
+    console.log("Sending to Backend:", formData);
     try {
       // Sending data to backend
       const response = await api.post("/admin/users", formData);
@@ -32,7 +34,7 @@ export default function AdminCreateUser() {
       
     } catch (err) {
      // This catches the "Password too short" error from Java
-    const errorMsg = err.response?.data?.message || "Server Error";
+   console.error(err.response.data); // This will tell you EXACTLY what is wrong
       alert("Error: " + (err.response?.data?.message || "Verify all fields."));
     } finally {
       setLoading(false);

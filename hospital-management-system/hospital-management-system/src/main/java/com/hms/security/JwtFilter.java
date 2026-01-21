@@ -1,13 +1,13 @@
 package com.hms.security;
 
 import jakarta.servlet.FilterChain;
-
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -21,8 +21,6 @@ public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final CustomUserDetailsService userDetailsService;
 
-    // ❌ REMOVE THIS LINE FROM HERE: String role = jwtUtil.extractRole(token);
-
     public JwtFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
@@ -32,36 +30,42 @@ public class JwtFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) 
             throws ServletException, IOException {
 
-        String path = request.getServletPath();
-        if (path.startsWith("/api/auth")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
 
-            if (jwtUtil.validateToken(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
-                String username = jwtUtil.extractUsername(token);
-                String role = jwtUtil.extractRole(token); // e.g., "ROLE_PATIENT"
+            try {
+                if (jwtUtil.validateToken(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    String username = jwtUtil.extractUsername(token);
+                 // Inside doFilterInternal...
+                    String role = jwtUtil.extractRole(token); 
+                    String formattedRole = role.toUpperCase().startsWith("ROLE_") ? 
+                                           role.toUpperCase() : "ROLE_" + role.toUpperCase();
 
-                // ✅ CRITICAL FIX: Ensure the authority list is correct
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                username,
-                                null,
-                                List.of(new SimpleGrantedAuthority(role)) 
-                        );
+                    // Load details
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                 // DEBUG LINE: Check your console for this output!
+                    System.out.println("Authenticated user authorities: " + userDetails.getAuthorities());
+                    
 
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-                
-                // Debugging: Print to console to see what role is being set
-                System.out.println("Extracted Role: " + role); 
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails, 
+                                    null,
+                                    userDetails.getAuthorities() // 👈 Trust the UserDetails authorities!
+                                    );
+                    // ... rest of code
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    
+                    System.out.println("Authenticated: " + username + " [Role: " + formattedRole + "]");
+                }
+            } catch (Exception e) {
+                System.out.println("JWT Filter Error: " + e.getMessage());
             }
         }
+        
         filterChain.doFilter(request, response);
     }
 }

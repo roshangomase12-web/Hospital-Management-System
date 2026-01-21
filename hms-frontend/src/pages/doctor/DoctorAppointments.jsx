@@ -1,143 +1,149 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
-import { useAuth } from "../../context/AuthContext";
-import { Check, X, Loader2, ChevronLeft, Calendar, Clock, AlertCircle } from "lucide-react";
+import axios from 'axios';
+import { Check, X, Clock, User, Loader2, Calendar } from "lucide-react";
 
 export default function DoctorAppointments() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  const { id } = useParams(); // Doctor ID from URL (used by Admin)
-  const { user } = useAuth();
-  const navigate = useNavigate();
 
-  // 1. Unified Fetch Logic
+  // 🟢 FIX 1: useCallback prevents the function from being recreated on every render
   const fetchAppointments = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const token = localStorage.getItem("token");
+  setLoading(true);
 
-      // ✅ Logic: If Admin and ID exists, fetch that specific doctor's data. 
-      // Otherwise, fetch the logged-in doctor's own data.
-      const endpoint = (user?.role === "ROLE_ADMIN" && id)
-        ? `/admin/doctors/${id}/availability` 
-        : "/doctor/appointments";
-
-      const res = await api.get(endpoint);
-      setAppointments(res.data);
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      if (err.response?.status === 403) {
-        setError("Access Denied: You do not have permission to view this page.");
-      } else {
-        setError("Failed to load schedule. Please check backend connection.");
+  try {
+    const response = await axios.get("http://localhost:8083/api/doctor/appointments", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setAppointments(response.data);
+  } catch (error) {
+    // This is where we handle the error properly
+    if (error.response) {
+      // The server responded with a status (403, 404, 500, etc.)
+      console.error("Server Error Status:", error.response.status);
+      console.error("Server Error Data:", error.response.data);
+      
+      if (error.response.status === 403) {
+        alert("Access Denied: Your account does not have Doctor permissions.");
       }
-    } finally {
-      setLoading(false);
+    } else if (error.request) {
+      // The request was made but no response was received (Backend is down)
+      console.error("Network Error: Backend is not reachable. Check if Spring Boot is running on port 8083.");
+    } else {
+      // Something else happened while setting up the request
+      console.error("Error Message:", error.message);
     }
-  }, [id, user]);
+    setAppointments([]);
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
+  // 🟢 FIX 3: Dependency array now has fetchAppointments safely
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // 2. Status Update (For Doctors only)
-  const updateStatus = async (appId, action) => {
+  const handleAction = async (appointmentId, action) => {
+    if (!window.confirm(`Are you sure you want to ${action} this appointment?`)) return;
+    
     try {
-      await api.put(`/doctor/appointments/${appId}/${action}`);
+      // Backend expects: /doctor/appointments/{id}/confirm or /reject
+      await api.put(`/doctor/appointments/${appointmentId}/${action}`);
       alert(`Appointment ${action}ed successfully!`);
-      fetchAppointments(); 
+      fetchAppointments(); // Refresh the list
     } catch (err) {
-      alert("Action failed: " + (err.response?.data?.message || "Error"));
+      console.error("Action error:", err);
+      alert("Failed to update appointment status.");
     }
   };
 
   if (loading) return (
-    <div className="flex h-screen items-center justify-center">
+    <div className="flex flex-col justify-center items-center min-h-[60vh] gap-4">
       <Loader2 className="animate-spin text-blue-600" size={40} />
-    </div>
-  );
-
-  if (error) return (
-    <div className="p-10 text-center">
-      <div className="bg-red-50 text-red-700 p-6 rounded-2xl border border-red-100 inline-block">
-        <AlertCircle className="mx-auto mb-2" size={32} />
-        <p className="font-bold">{error}</p>
-        <button onClick={() => navigate(-1)} className="mt-4 bg-red-100 px-4 py-2 rounded-lg">Go Back</button>
-      </div>
+      <p className="text-slate-500 font-medium">Loading your schedule...</p>
     </div>
   );
 
   return (
     <div className="p-6 bg-slate-50 min-h-screen">
-      {/* Back Button for Admin */}
-      <button onClick={() => navigate(-1)} className="flex items-center text-blue-600 mb-4 hover:underline">
-        <ChevronLeft size={20} /> Back
-      </button>
+      <h2 className="text-3xl font-bold mb-6 text-slate-800 flex items-center gap-2">
+        <Calendar className="text-blue-600" /> My Appointments
+      </h2>
 
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          {user?.role === "ROLE_ADMIN" ? "Doctor Availability Schedule" : "My Patient Requests"}
-        </h2>
-        <span className="bg-blue-100 text-blue-700 px-4 py-1 rounded-full text-sm font-bold">
-          Total Items: {appointments.length}
-        </span>
-      </div>
-      
-      <div className="grid gap-4">
-        {appointments.length > 0 ? appointments.map(app => (
-          <div key={app.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Calendar size={16} className="text-blue-500" />
-                <span className="font-bold text-slate-800">
-                  {app.availableDate || app.appointmentDate}
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-2 text-slate-500 text-sm">
-                <Clock size={16} />
-                <span>{app.availableTime || app.appointmentTime} {app.endTime ? `- ${app.endTime}` : ""}</span>
-              </div>
-
-              {app.patientName && (
-                <p className="text-sm font-medium text-slate-600">Patient: {app.patientName}</p>
-              )}
-
-              <p className={`text-xs font-bold uppercase tracking-wider mt-2 ${
-                app.status === 'OPEN' || app.status === 'APPROVED' ? 'text-green-600' : 'text-orange-500'
-              }`}>
-                Status: {app.status}
-              </p>
-            </div>
-
-            {/* Actions for Doctors */}
-            {app.status === 'PENDING' && user?.role === "ROLE_DOCTOR" && (
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => updateStatus(app.id, 'approve')} 
-                  className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition-all"
-                  title="Approve"
-                >
-                  <Check size={20}/>
-                </button>
-                <button 
-                  onClick={() => updateStatus(app.id, 'reject')} 
-                  className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-all"
-                  title="Reject"
-                >
-                  <X size={20}/>
-                </button>
-              </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="p-4 font-semibold text-slate-700">Patient</th>
+              <th className="p-4 font-semibold text-slate-700">Date & Time</th>
+              <th className="p-4 font-semibold text-slate-700 text-center">Status</th>
+              <th className="p-4 font-semibold text-slate-700 text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* 🟢 FIX 4: Safety check before mapping */}
+            {appointments.length > 0 ? (
+              appointments.map((app) => (
+                <tr key={app.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="p-4 font-medium text-slate-800">
+                    <div className="flex items-center gap-2">
+                      <User size={16} className="text-slate-400" />
+                      {app.patientName || app.patient?.username || "Guest"}
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex flex-col text-sm">
+                      <span className="font-bold text-slate-700">{app.appointmentDate}</span>
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <Clock size={12} /> {app.appointmentTime}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-center">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      app.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' : 
+                      app.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 
+                      'bg-orange-100 text-orange-700'
+                    }`}>
+                      {app.status}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex justify-center gap-2">
+                      {/* Show actions only if the appointment is PENDING */}
+                      {app.status === 'PENDING' && (
+                        <>
+                          <button 
+                            onClick={() => handleAction(app.id, 'confirm')}
+                            className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all"
+                            title="Accept"
+                          >
+                            <Check size={18} />
+                          </button>
+                          <button 
+                            onClick={() => handleAction(app.id, 'reject')}
+                            className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all"
+                            title="Reject"
+                          >
+                            <X size={18} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="4" className="p-10 text-center text-slate-400">
+                  No appointments found.
+                </td>
+              </tr>
             )}
-          </div>
-        )) : (
-          <div className="bg-white p-16 text-center rounded-xl border-2 border-dashed text-slate-400">
-            No records found.
-          </div>
-        )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
